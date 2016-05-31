@@ -1,7 +1,7 @@
 import sqlalchemy as sa
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import pandas
+
 
 connection_string = "postgresql://ctools_pre:once848_soon@treehug.its.unc.edu/ctools_pre"
 engine = sa.create_engine(connection_string)
@@ -29,7 +29,3 @@ def load_example_roads():
     distinct_criteria = (Road.stfips, Road.ctfips, Road.fclass_rev, Road.aadt)
     query = session.query(Road).distinct(*distinct_criteria)
     return query.all()
-
-
-if __name__ == "__main__":
-    load_example_roads()

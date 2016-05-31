@@ -2,9 +2,14 @@ import pandas
 import math
 import pyproj
 import os
-import load
 import json
-import numpy as np
+import subprocess
+from celery import Celery
+from common import mkdir
+
+
+app = Celery('tasks', broker='ampq://guest@localhost//')
+model_executable = "/ctools.ifort.x"
 
 _lambert = pyproj.Proj("+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +ellps=GRS80 "
                        "+datum=NAD83 +units=m +no_defs")
@@ -71,14 +76,6 @@ def input_file_parameter_combinations():
                                "pollutant": pollutant}
 
 
-def mkdir(dir_name):
-    try:
-        os.mkdir(dir_name)
-    except OSError as err:
-        if not err.errno == 17:
-            raise
-
-
 def generate_run_files(location, source_df, input_parameters):
     parameters = {c: getattr(source_df, c)[0] for c in source_df.columns}
     parameters.update(input_parameters)
@@ -102,6 +99,7 @@ def generate_input_file(location, input_parameters):
         f.write(input_contents)
 
 
+@app.task
 def generate_road_run_configurations(road, location):
     road_sub_dir = os.path.join(location, str(road.id))
     mkdir(road_sub_dir)
@@ -115,26 +113,6 @@ def generate_road_run_configurations(road, location):
         generate_run_files(run_dir, road_df, combination)
 
 
-def generate_road_sets(location):
-    road_dir = os.path.join(location, "roads")
-    mkdir(location)
-    mkdir(road_dir)
-    roads = load.load_example_roads()
-    for road in roads:
-        print "generating configurations for road ", str(road.id)
-        generate_road_run_configurations(road, road_dir)
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("location")
-    parser.add_argument("--road", action="store_true")
-    args = parser.parse_args()
-    if args.road:
-        generate_road_sets(args.location)
-
-
-if __name__ == "__main__":
-    main()
-
+@app.task
+def run_model(location, run_type):
+    subprocess.call([model_executable, location, run_type])
