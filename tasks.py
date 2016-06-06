@@ -4,15 +4,20 @@ import pyproj
 import os
 import json
 import subprocess
+import numpy as np
+from scipy.optimize import curve_fit, newton
 from celery import Celery
 from common import mkdir
 
 
-app = Celery('tasks', broker='ampq://guest@localhost//')
-model_executable = "/ctools.ifort.x"
+app = Celery('tasks', broker='amqp://guest@localhost//')
+model_dir = "/home/nathan/Projects/CTOOLS_12_07_2015/"
+model_executable = "/home/nathan/Projects/CTOOLS_12_07_2015/CTOOLS_HOURLY.ifort.x"
 
 _lambert = pyproj.Proj("+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +ellps=GRS80 "
                        "+datum=NAD83 +units=m +no_defs")
+
+os.chdir(model_dir)
 
 
 def latlong_dist(p0, p1):
@@ -22,12 +27,12 @@ def latlong_dist(p0, p1):
 
 
 def generate_receptors_df_for_line(startx, starty, endx, endy, num_receptors=50, receptor_offset=10):
-    delta_x = endx - endy
+    delta_x = endx - startx
     delta_y = endy - starty
     slope = delta_x / delta_y
     perpendicular_slope = - 1 / slope
-    midpoint_x = startx + delta_x / 2
-    midpoint_y = starty + delta_y / 2
+    midpoint_x = (startx + endx) / 2
+    midpoint_y = (starty + endy) / 2
     midpoint = (midpoint_x, midpoint_y)
     theta = math.atan(perpendicular_slope)
     dx = math.cos(theta) * receptor_offset
@@ -114,5 +119,68 @@ def generate_road_run_configurations(road, location):
 
 
 @app.task
-def run_model(location, run_type):
-    subprocess.call([model_executable, location, run_type])
+def run_model(run_type, location):
+    subprocess.call([model_executable, run_type, location + "/"])
+
+
+def binomial_coef(n, i):
+    return np.product(range(1, n + 1)) / np.product(range(1, i + 1)) / np.product(range(1, n - i + 1))
+
+
+def bernstein_polynomial(x, n, i):
+    return binomial_coef(n, i) * (x ** i) * ((1 - x) ** (n - i))
+
+
+def load_results_file(location):
+    road_output_file = os.path.join(location, "results_CTOOLS_HOURLY_ROAD_Output.csv")
+    rail_output_file = os.path.join(location, "results_CTOOLS_HOURLY_RAIL_Output.csv")
+    area_output_file = os.path.join(location, "results_CTOOLS_HOURLY_AREA_Output.csv")
+    point_output_file = os.path.join(location, "results_CTOOLS_HOURLY_POINT_Output.csv")
+    sit_output_file = os.path.join(location, "results_CTOOLS_HOURLY_SIT_Output.csv")
+    if os.path.isfile(road_output_file):
+        return pandas.read_csv(road_output_file)
+    elif os.path.isfile(rail_output_file):
+        return pandas.read_csv(rail_output_file)
+    elif os.path.isfile(area_output_file):
+        return pandas.read_csv(area_output_file)
+    elif os.path.isfile(point_output_file):
+        return pandas.read_csv(point_output_file)
+    elif os.path.isfile(sit_output_file):
+        return pandas.read_csv(sit_output_file)
+    else:
+        raise ValueError("No results in specified location")
+
+
+def generate_bezier_function(X, Y):
+    def bezier_curve(x0, p1x, p1y, p2x, p2y):
+        p0 = np.array([X[0], Y[0]])
+        p1 = np.array([p1x, p1y])
+        p2 = np.array([p2x, p2y])
+        p3 = np.array([X[-1], Y[-1]])
+        alpha0 = binomial_coef(3, 0)
+        alpha1 = binomial_coef(3, 1)
+        alpha2 = binomial_coef(3, 2)
+        alpha3 = binomial_coef(3, 3)
+        beta0 = X[0] * alpha0
+        beta1 = p1x * alpha1
+        beta2 = p2x * alpha2
+        beta3 = X[-1] * alpha3
+        gamma1 = beta2 - 3 * beta3
+        gamma2 = beta1 - 2 * beta2 + 3 * beta3
+        gamma3 = beta0 - beta1 + beta2 - beta3
+        x1 = np.array([[newton(lambda t: gamma3 * t ** 3 + gamma2 * t ** 2 + gamma1 * t + beta3 - x, 0.5)] for x in x0])
+        b0 = bernstein_polynomial(x1, 3, 0)
+        b1 = bernstein_polynomial(x1, 3, 1)
+        b2 = bernstein_polynomial(x1, 3, 2)
+        b3 = bernstein_polynomial(x1, 3, 3)
+        result = b0 * p0 + b1 * p1 + b2 * p2 + b3 * p3
+        return result
+    return bezier_curve
+
+
+def fit_model_output(X, Y):
+    bezier_curve = generate_bezier_function(X, Y)
+    third = round(len(X) / 3)
+    initial_values = [X[third], Y[third], X[2*third], Y[2*third]]
+    (opts, cov) = curve_fit(bezier_curve, X, Y, initial_values)
+    return bezier_curve, opts
