@@ -52,7 +52,8 @@ def main():
     parser.add_argument("location")
     parser.add_argument("--local", action="store_true", default=False)
     args = parser.parse_args()
-    recurse_directory(args.location, args.local)
+    if args.location:
+        recurse_directory(args.location, args.local)
 
 
 if __name__ == "__main__":

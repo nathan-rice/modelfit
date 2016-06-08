@@ -29,14 +29,14 @@ class InterpolatedResult(Base):
     __tablename__ = "interpolated_result"
     id = sa.Column("interpolated_result_id", sa.Integer, primary_key=True)
     parameters = sa.Column("parameters", JSON)
-    x0 = sa.Column(sa.Numeric, asdecimal=False)
-    y0 = sa.Column(sa.Numeric, asdecimal=False)
-    x1 = sa.Column(sa.Numeric, asdecimal=False)
-    y1 = sa.Column(sa.Numeric, asdecimal=False)
-    x2 = sa.Column(sa.Numeric, asdecimal=False)
-    y2 = sa.Column(sa.Numeric, asdecimal=False)
-    x3 = sa.Column(sa.Numeric, asdecimal=False)
-    y3 = sa.Column(sa.Numeric, asdecimal=False)
+    x0 = sa.Column(sa.Numeric(asdecimal=False))
+    y0 = sa.Column(sa.Numeric(asdecimal=False))
+    x1 = sa.Column(sa.Numeric(asdecimal=False))
+    y1 = sa.Column(sa.Numeric(asdecimal=False))
+    x2 = sa.Column(sa.Numeric(asdecimal=False))
+    y2 = sa.Column(sa.Numeric(asdecimal=False))
+    x3 = sa.Column(sa.Numeric(asdecimal=False))
+    y3 = sa.Column(sa.Numeric(asdecimal=False))
 
 
 def load_example_roads():

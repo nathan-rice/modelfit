@@ -13,6 +13,8 @@ from common import mkdir
 app = Celery('tasks', broker='amqp://guest@localhost//')
 model_dir = "/home/nathan/Projects/CTOOLS_12_07_2015/"
 model_executable = "/home/nathan/Projects/CTOOLS_12_07_2015/CTOOLS_HOURLY.ifort.x"
+template_location = '/home/nathan/PycharmProjects/modelfit/templates/'
+
 
 _lambert = pyproj.Proj("+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +ellps=GRS80 "
                        "+datum=NAD83 +units=m +no_defs")
@@ -97,7 +99,8 @@ def generate_parameter_file(location, input_parameters):
 
 def generate_input_file(location, input_parameters):
     input_file = os.path.join(location, "CTOOLS_Inputs.txt")
-    with open('templates/CTOOLS_Inputs.txt') as f:
+    template_file = os.path.join(template_location, "CTOOLS_Inputs.txt")
+    with open(template_file) as f:
         template = f.read()
     input_contents = template.format(**input_parameters)
     with open(input_file, 'w') as f:
@@ -110,12 +113,14 @@ def generate_road_run_configurations(road, location):
     mkdir(road_sub_dir)
     receptor_df = generate_receptors_df_for_road(road)
     road_df = road_to_dataframe(road)
+    print road_sub_dir
     for (i, combination) in enumerate(input_file_parameter_combinations()):
         run_dir = os.path.join(road_sub_dir, str(i))
         mkdir(run_dir)
         receptor_df.to_csv(os.path.join(run_dir, "receptors.csv"), index=False)
         road_df.to_csv(os.path.join(run_dir, "roads.csv"), index=False)
         generate_run_files(run_dir, road_df, combination)
+    print "generated configurations for road ", road.id
 
 
 @app.task
